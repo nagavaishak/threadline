@@ -8,7 +8,7 @@ Threadline is a working Alludium-aligned concept for a **deal-state layer** betw
 
 ![Threadline guided contradiction review](preview-v4-walkthrough.png)
 
-### [Open the live product](https://threadline-jade-eta.vercel.app)
+### [Open the live product](https://threadline-vc.vercel.app)
 
 [View the source and commit history](https://github.com/nagavaishak/threadline)
 
