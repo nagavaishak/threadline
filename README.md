@@ -12,6 +12,8 @@ Threadline is a working Alludium-aligned concept for a **deal-state layer** betw
 
 [View the source and commit history](https://github.com/nagavaishak/threadline)
 
+[Read the prototype-to-production architecture](ARCHITECTURE.md)
+
 Alludium already moves work between tasks. Threadline explores how reviewed outputs could become accepted, versioned deal state. Candidate changes are reconciled, approved and committed before they enter a downstream task context.
 
 ## Start here
