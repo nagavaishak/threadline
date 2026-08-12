@@ -6,6 +6,10 @@ Threadline is a working Alludium-aligned concept for a **reviewed-output commit 
 
 ![Threadline candidate-change review](preview-v3-review.png)
 
+### [Open the live product](https://threadline-jade-eta.vercel.app)
+
+[View the source and commit history](https://github.com/nagavaishak/threadline)
+
 Alludium already moves work between tasks. Threadline explores how reviewed outputs could become accepted, versioned deal state. Candidate changes are reconciled, approved and committed before they enter a downstream task context.
 
 ## Start here
