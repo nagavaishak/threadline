@@ -95,7 +95,14 @@ export function getArtifacts(deal) {
   }
   for (const event of deal.events.filter(event => event.type === "pack_compiled")) {
     const existing = artifacts.find(item => item.id === event.payload.artifact.id);
-    if (existing) Object.assign(existing, deepClone(event.payload.artifact));
+    if (existing) {
+      Object.assign(existing, deepClone(event.payload.artifact));
+      if (existing.state === "fresh") {
+        delete existing.staleAt;
+        delete existing.staleReason;
+        delete existing.invalidatedByRevision;
+      }
+    }
     else artifacts.push(deepClone(event.payload.artifact));
   }
   return artifacts;
@@ -194,7 +201,8 @@ export function sealPack(deal, pack, artifactId = `pack-${pack.task}`) {
   const receipt = exportReceipt(deal, pack);
   const next = deepClone(deal);
   const state = getAcceptedState(next);
-  next.events.push({ id: eventId("pack", next, state.committedAt), type: "pack_compiled", at: state.committedAt, actor: "Context Compiler", payload: { receipt, artifact: { id: artifactId, title: `${taskPolicies[pack.task]?.label || pack.task} context`, kind: "context-pack", task: pack.task, state: "fresh", revision: pack.revision, receiptHash: receipt.hash, dependencies: pack.included.map(item => ({ claimId: item.claim.id, revision: pack.revision })) } } });
+  const previous = getArtifacts(next).find(artifact => artifact.id === artifactId);
+  next.events.push({ id: eventId("pack", next, state.committedAt), type: "pack_compiled", at: state.committedAt, actor: "Context Compiler", payload: { receipt, artifact: { id: artifactId, title: previous?.title || `${taskPolicies[pack.task]?.label || pack.task} context`, kind: previous?.kind || "context-pack", task: pack.task, state: "fresh", revision: pack.revision, receiptHash: receipt.hash, dependencies: pack.included.map(item => ({ claimId: item.claim.id, revision: pack.revision })) } } });
   return { deal: next, receipt };
 }
 

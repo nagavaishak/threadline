@@ -66,6 +66,21 @@ test("sealing a new pack replaces stale dependency state with current revision",
   assert.equal(artifact.state, "fresh");
   assert.equal(artifact.revision, 18);
   assert.equal(artifact.receiptHash, sealed.receipt.hash);
+  assert.equal(artifact.staleReason, undefined);
+  assert.equal(artifact.invalidatedByRevision, undefined);
+});
+
+test("recompiling an existing output preserves its identity and clears stale metadata", () => {
+  const approved = approveChange(deepClone(seedDeal), "p-pipeline", "SK").deal;
+  const before = getArtifacts(approved).find(x => x.id === "a-ic-snapshot");
+  const pack = compileContextPack(approved, { task: "ic", budget: 2600 });
+  const sealed = sealPack(approved, pack, "a-ic-snapshot");
+  const after = getArtifacts(sealed.deal).find(x => x.id === "a-ic-snapshot");
+  assert.equal(before.title, "IC financial snapshot");
+  assert.equal(after.title, before.title);
+  assert.equal(after.kind, before.kind);
+  assert.equal(after.state, "fresh");
+  assert.equal(after.staleReason, undefined);
 });
 
 test("Alludium-style task output ingestion is idempotent", () => {
