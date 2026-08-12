@@ -2,9 +2,11 @@
 
 > **Independent concept prototype using fictional AsterOS data. Not affiliated with or integrated into Alludium.**
 
-Threadline is a working Alludium-aligned concept for a **reviewed-output commit protocol** between investment tasks.
+Threadline is a working Alludium-aligned concept for a **deal-state layer** between investment tasks. It turns reviewed task outputs into versioned institutional knowledge and exposes every downstream artifact that must change with them.
 
-![Threadline candidate-change review](preview-v3-review.png)
+![Threadline product overview](preview-v4-overview.png)
+
+![Threadline guided contradiction review](preview-v4-walkthrough.png)
 
 ### [Open the live product](https://threadline-jade-eta.vercel.app)
 
@@ -18,7 +20,7 @@ Alludium already moves work between tasks. Threadline explores how reviewed outp
 npm run serve
 ```
 
-Open `http://localhost:4173`, then follow this 90-second path:
+Open `http://localhost:4173`, then follow the guided three-minute walkthrough:
 
 1. Confirm accepted revision 17 still contains €4.2m qualified pipeline.
 2. Review the €1.8m candidate and its exact CRM/call/deck excerpts.
@@ -57,7 +59,8 @@ Then visit `http://localhost:4173`.
 - Deterministic receipts containing revision, policy, permissions, exclusions and content hash.
 - True revision replay that preserves earlier accepted values.
 - Local persistence plus JSON receipt export.
-- Eight deterministic domain-invariant tests.
+- A first-run product explanation and contextual three-step walkthrough.
+- Nine deterministic domain-invariant tests.
 
 The deterministic domain model lives in `core.js`; the application shell lives in `app.js`. External integrations are represented by realistic fixture payloads, not live connections.
 
