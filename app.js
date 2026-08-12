@@ -225,11 +225,38 @@ function renderGuideRail(journey, state) {
 function renderCompiler() {
   const pack = compileContextPack(ui.deal, { task: ui.task, budget: ui.budget });
   const blocked = pack.status === "blocked";
+  const rangeProgress = ((ui.budget - 900) / 3300) * 100;
   return `<div class="modal-backdrop"><section class="compiler-modal" role="dialog" aria-modal="true" aria-labelledby="compilerTitle" data-modal>
     <header><div><span class="eyebrow">STEP 3 · BOUNDED CONTEXT</span><h2 id="compilerTitle">Rebuild this output from accepted state</h2><p>Threadline includes required claims first, excludes anything outside policy, and records exactly what the output used.</p></div><button class="icon-button" data-action="close" aria-label="Close compiler">${icon("x")}</button></header>
-    <div class="compiler-grid"><section class="compiler-controls"><label>Output policy<select data-input="task"><option value="commercial" ${ui.task === "commercial" ? "selected" : ""}>Commercial diligence</option><option value="ic" ${ui.task === "ic" ? "selected" : ""}>Investment committee</option><option value="partner" ${ui.task === "partner" ? "selected" : ""}>Partner review</option></select></label><label><span>Context budget <b>${ui.budget.toLocaleString()} tokens</b></span><input type="range" min="900" max="4200" step="100" value="${ui.budget}" data-input="budget" aria-label="Context token budget"></label><div class="compiler-status ${pack.status}"><strong>${blocked ? "BLOCKED—NOT ENOUGH CONTEXT" : "READY TO REBUILD"}</strong><p>${blocked ? `Required claims need at least ${pack.minimumRequiredTokens.toLocaleString()} tokens. Threadline will not silently omit them.` : `${pack.tokens.toLocaleString()} tokens · accepted revision ${pack.revision}`}</p></div></section><section class="compiler-preview"><div class="block-title"><span>WHAT THE OUTPUT WILL RECEIVE</span><small>${pack.included.length} claims</small></div>${pack.included.map(i => `<article class="pack-row"><span>${i.required ? "REQUIRED" : "OPTIONAL"}</span><div><strong>${esc(i.claim.acceptedValue?.metric || i.claim.category)}</strong><small>${i.claim.sourceIds.length} source excerpts attached</small></div><b>${esc(formatValue(i.claim.acceptedValue))}</b></article>`).join("")}</section></div>
+    <div class="compiler-grid"><section class="compiler-controls"><label>Output policy<select data-input="task"><option value="commercial" ${ui.task === "commercial" ? "selected" : ""}>Commercial diligence</option><option value="ic" ${ui.task === "ic" ? "selected" : ""}>Investment committee</option><option value="partner" ${ui.task === "partner" ? "selected" : ""}>Partner review</option></select></label><label class="budget-control"><span>Context budget <b data-budget-label>${ui.budget.toLocaleString()} tokens</b></span><input type="range" min="900" max="4200" step="100" value="${ui.budget}" style="--range-progress:${rangeProgress}%" data-input="budget" aria-label="Context token budget" aria-valuetext="${ui.budget.toLocaleString()} tokens"><small><i>900</i><i>4,200</i></small></label><div class="compiler-status ${pack.status}" data-compiler-status>${compilerStatusMarkup(pack)}</div></section><section class="compiler-preview" data-compiler-preview>${compilerPreviewMarkup(pack)}</section></div>
     <footer><div><span>AFTER REBUILD</span><strong>A deterministic receipt proves the revision, policy and exclusions used.</strong></div><button class="btn secondary" data-action="close">Cancel</button><button class="btn primary" data-action="seal" ${blocked ? "disabled" : ""}>Rebuild & verify ${icon("arrow")}</button></footer>
   </section></div>`;
+}
+
+function compilerStatusMarkup(pack) {
+  const blocked = pack.status === "blocked";
+  return `<strong>${blocked ? "BLOCKED—NOT ENOUGH CONTEXT" : "READY TO REBUILD"}</strong><p>${blocked ? `Required claims need at least ${pack.minimumRequiredTokens.toLocaleString()} tokens. Threadline will not silently omit them.` : `${pack.tokens.toLocaleString()} tokens · accepted revision ${pack.revision}`}</p>`;
+}
+
+function compilerPreviewMarkup(pack) {
+  return `<div class="block-title"><span>WHAT THE OUTPUT WILL RECEIVE</span><small>${pack.included.length} claims</small></div>${pack.included.map(i => `<article class="pack-row"><span>${i.required ? "REQUIRED" : "OPTIONAL"}</span><div><strong>${esc(i.claim.acceptedValue?.metric || i.claim.category)}</strong><small>${i.claim.sourceIds.length} source excerpts attached</small></div><b>${esc(formatValue(i.claim.acceptedValue))}</b></article>`).join("")}`;
+}
+
+function refreshCompiler() {
+  const pack = compileContextPack(ui.deal, {task: ui.task, budget: ui.budget});
+  const slider = document.querySelector('[data-input="budget"]');
+  const label = document.querySelector("[data-budget-label]");
+  const status = document.querySelector("[data-compiler-status]");
+  const preview = document.querySelector("[data-compiler-preview]");
+  const seal = document.querySelector('[data-action="seal"]');
+  if (slider) {
+    slider.style.setProperty("--range-progress", `${((ui.budget - 900) / 3300) * 100}%`);
+    slider.setAttribute("aria-valuetext", `${ui.budget.toLocaleString()} tokens`);
+  }
+  if (label) label.textContent = `${ui.budget.toLocaleString()} tokens`;
+  if (status) { status.className = `compiler-status ${pack.status}`; status.innerHTML = compilerStatusMarkup(pack); }
+  if (preview) preview.innerHTML = compilerPreviewMarkup(pack);
+  if (seal) seal.disabled = pack.status === "blocked";
 }
 
 function download(data, name) {
@@ -283,7 +310,7 @@ document.addEventListener("click", event => {
 });
 
 document.addEventListener("input", event => {
-  if (event.target.dataset.input === "budget") { ui.budget = Number(event.target.value); render(); }
+  if (event.target.dataset.input === "budget") { ui.budget = Number(event.target.value); refreshCompiler(); }
 });
 document.addEventListener("change", event => {
   if (event.target.dataset.input === "task") { ui.task = event.target.value; render(); }
