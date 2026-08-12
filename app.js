@@ -26,7 +26,7 @@ const esc = value => String(value ?? "").replace(/[&<>'"]/g, c => ({'&':'&amp;',
 
 function validDeal(value) { return value?.schema === "threadline.deal-state.v3" && Array.isArray(value.events) && Array.isArray(value.claims); }
 function loadDeal() { try { const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)); return validDeal(parsed) ? parsed : deepClone(seedDeal); } catch { return deepClone(seedDeal); } }
-let ui = { deal: loadDeal(), view: "review", selectedProposal: "p-pipeline", revision: 17, modal: false, task: "commercial", budget: 2400, query: "" };
+let ui = { deal: loadDeal(), view: "review", selectedProposal: "p-pipeline", revision: 17, modal: false, task: "commercial", artifactId: "a-commercial-pack", budget: 2400, query: "" };
 
 function persist() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(ui.deal)); } catch { notify("Local persistence is unavailable in this browser."); } }
 function accepted() { return getAcceptedState(ui.deal); }
@@ -46,10 +46,9 @@ function notify(message, success = false) {
 function render() {
   const state = accepted();
   app.innerHTML = `<div class="app-shell">
-    <aside class="global-rail"><div class="brand-mark"><span></span><span></span><span></span></div><div class="rail-stack"><button class="rail-btn active" aria-label="State">${icon("state")}</button><span class="rail-btn unavailable" title="Alludium Tasks — product context">${icon("file")}</span></div><div class="rail-bottom"><button class="rail-btn" data-action="reset" aria-label="Reset demo">${icon("reset")}</button><div class="avatar">SK</div></div></aside>
-    <section class="project-shell">
-      <header class="project-bar"><div class="breadcrumbs"><span class="crumb-muted">Projects</span><span>/</span><strong>AsterOS</strong><span class="stage-pill">Evaluation</span></div><div class="concept-label">INDEPENDENT CONCEPT · FICTIONAL DATA</div><div class="bar-actions"><button class="btn primary small" data-action="compile">${icon("spark")} Compile context</button></div></header>
-      <nav class="project-tabs">${["Command","Tasks","Activity","Files","Data","Operations","Integrations","Team"].map(t=>`<span class="project-tab unavailable">${t}</span>`).join("")}<span class="project-tab active">State <span>CONCEPT</span></span></nav>
+    <aside class="global-rail"><div class="brand-mark" aria-label="Threadline"><span></span><span></span><span></span></div><div class="rail-bottom"><button class="rail-btn" data-action="reset" aria-label="Reset demo" title="Reset demo">${icon("reset")}</button><div class="avatar">SK</div></div></aside>
+    <section class="project-shell protocol-shell">
+      <header class="project-bar"><div class="breadcrumbs"><strong>Threadline</strong><span>/</span><strong>AsterOS</strong><span class="stage-pill">Evaluation</span></div><div class="concept-label">INDEPENDENT CONCEPT · FICTIONAL DATA</div><div class="bar-actions"><button class="btn primary small" data-action="compile" data-artifact="a-commercial-pack">${icon("spark")} Compile context</button></div></header>
       <div class="workbench commit-workbench">
         ${renderInbox(state)}
         <main class="main-pane"><div class="main-toolbar"><div class="view-switcher"><button data-view="review" class="${ui.view==='review'?'active':''}">${icon("state")} Review</button><button data-view="artifacts" class="${ui.view==='artifacts'?'active':''}">${icon("file")} Dependencies</button><button data-view="revisions" class="${ui.view==='revisions'?'active':''}">${icon("clock")} Revisions</button></div><span class="revision-badge">ACCEPTED REVISION <b>${state.revision}</b></span></div><div class="main-content">${renderMain(state)}</div></main>
@@ -85,7 +84,7 @@ function renderReview(state) {
   const rightValue = proposal.payload.to;
   return `<div class="review-page">
     <section class="review-intro"><span class="eyebrow">REVIEWED-OUTPUT COMMIT PROTOCOL</span><h1>Accept a state change without losing the prior decision context.</h1><p>A completed Investment Fit Screen surfaced a definition conflict. The candidate value remains outside accepted state until an investor commits it.</p></section>
-    <section class="commit-card panel"><header><div><span class="candidate-pill">CANDIDATE CHANGE</span><h2>${esc(c.acceptedValue?.metric)}</h2></div><span class="base-revision">BASED ON REVISION ${proposal.baseRevision}</span></header>
+    <section class="commit-card panel"><header><div><span class="candidate-pill ${committed ? "committed" : ""}">${committed ? "COMMITTED STATE CHANGE" : proposal.state === "rejected" ? "REJECTED CANDIDATE" : "CANDIDATE CHANGE"}</span><h2>${esc(c.acceptedValue?.metric)}</h2></div><span class="base-revision">BASED ON REVISION ${proposal.baseRevision}</span></header>
       <div class="state-compare"><div class="accepted-side"><span>${committed ? `PREVIOUS STATE · R${proposal.baseRevision}` : `ACCEPTED STATE · R${state.revision}`}</span><strong>${esc(formatValue(leftValue))}</strong><p>${esc(leftValue?.period)}</p><em>${committed ? "Preserved for revision replay" : "Used by current downstream work"}</em></div><div class="commit-arrow">${icon("arrow")}</div><div class="proposed-side ${committed ? "committed" : ""}"><span>${committed ? `ACCEPTED STATE · R${state.revision}` : "CANDIDATE STATE"}</span><strong>${esc(formatValue(rightValue))}</strong><p>${esc(rightValue.period)}</p><em>${committed ? "Active for newly compiled work" : "Not visible to agents until approved"}</em></div></div>
       <div class="definition-conflict"><strong>Definition conflict</strong><p>${esc(proposal.payload.reason)}</p></div>
       <section class="evidence-section"><div class="section-title"><span>EXACT SOURCE EXCERPTS</span><b>${proposal.payload.sourceIds.length}</b></div><div class="evidence-grid">${proposal.payload.sourceIds.map(id=>sourceCard(source(id))).join("")}</div></section>
@@ -100,12 +99,12 @@ function sourceCard(s) { return `<article class="source-card-static"><header><sp
 function renderDecisionBoundary(proposal, state, impacted) {
   if (proposal.state === "pending") return `<footer class="commit-actions"><div><strong>Human commit boundary</strong><p>Approval creates revision ${state.revision+1}; rejection appends a review event and leaves revision ${state.revision} unchanged.</p></div><button class="btn danger" data-action="reject" data-id="${proposal.proposalId}">${icon("x")} Reject</button><button class="btn primary" data-action="approve" data-id="${proposal.proposalId}">${icon("check")} Approve & commit R${state.revision+1}</button></footer>`;
   if (proposal.state === "rejected") return `<footer class="commit-result rejected">${icon("x")}<div><strong>Candidate rejected by ${esc(proposal.reviewedBy)}</strong><p>Accepted revision ${state.revision} was not changed.</p></div></footer>`;
-  return `<footer class="commit-result approved">${icon("check")}<div><strong>Committed as revision ${state.revision} by ${esc(proposal.reviewedBy)}</strong><p>${impacted.filter(a=>a.state==='stale').length} dependent artifacts are stale and explain why.</p></div><button class="btn primary" data-action="compile">Recompile Commercial Diligence ${icon("arrow")}</button></footer>`;
+  return `<footer class="commit-result approved">${icon("check")}<div><strong>Committed as revision ${state.revision} by ${esc(proposal.reviewedBy)}</strong><p>${impacted.filter(a=>a.state==='stale').length} dependent artifacts are stale and explain why.</p></div><button class="btn primary" data-action="compile" data-task="commercial" data-artifact="a-commercial-pack">Recompile Commercial Diligence ${icon("arrow")}</button></footer>`;
 }
 
 function renderArtifacts(state) {
   const list = artifacts();
-  return `<div class="artifact-page"><section class="review-intro"><span class="eyebrow">DEPENDENCY INVALIDATION</span><h1>Accepted state changes invalidate downstream work.</h1><p>Every pack and output records the claim revision it used. Nothing is silently refreshed.</p></section><div class="artifact-grid">${list.map(a=>`<article class="artifact-card ${a.state}"><header><span>${icon("file")}</span><em>${a.state.toUpperCase()}</em></header><h2>${esc(a.title)}</h2><p>Compiled against accepted revision ${a.revision}</p>${a.staleReason?`<div class="stale-reason"><strong>Why stale</strong><p>${esc(a.staleReason)}</p></div>`:""}<div class="dependency-list">${a.dependencies.map(d=>`<span>${esc(claim(d.claimId)?.acceptedValue?.metric || d.claimId)} · R${d.revision}</span>`).join("")}</div>${a.state==='stale'?`<button class="btn primary" data-action="compile" data-task="${a.task}">Recompile against R${state.revision}</button>`:a.receiptHash?`<button class="btn secondary" data-receipt="${a.receiptHash}">Receipt ${esc(a.receiptHash)}</button>`:""}</article>`).join("")}</div></div>`;
+  return `<div class="artifact-page"><section class="review-intro"><span class="eyebrow">DEPENDENCY INVALIDATION</span><h1>Accepted state changes invalidate downstream work.</h1><p>Every pack and output records the claim revision it used. Nothing is silently refreshed.</p></section><div class="artifact-grid">${list.map(a=>`<article class="artifact-card ${a.state}"><header><span>${icon("file")}</span><em>${a.state.toUpperCase()}</em></header><h2>${esc(a.title)}</h2><p>Compiled against accepted revision ${a.revision}</p>${a.staleReason?`<div class="stale-reason"><strong>Why stale</strong><p>${esc(a.staleReason)}</p></div>`:""}<div class="dependency-list">${a.dependencies.map(d=>`<span>${esc(claim(d.claimId)?.acceptedValue?.metric || d.claimId)} · R${d.revision}</span>`).join("")}</div>${a.state==='stale'?`<button class="btn primary" data-action="compile" data-task="${a.task}" data-artifact="${a.id}">Recompile against R${state.revision}</button>`:a.receiptHash?`<button class="btn secondary" data-receipt="${a.receiptHash}">${icon("download")} Download receipt ${esc(a.receiptHash)}</button>`:`<span class="artifact-current">No newer accepted revision</span>`}</article>`).join("")}</div></div>`;
 }
 
 function renderRevisions() {
@@ -132,19 +131,23 @@ document.addEventListener("click", event => {
   const proposal = event.target.closest("[data-proposal]"); if (proposal) { ui.selectedProposal=proposal.dataset.proposal;ui.view='review';render();return; }
   const view = event.target.closest("[data-view]"); if (view) { ui.view=view.dataset.view;render();return; }
   const rev = event.target.closest("[data-revision]"); if (rev) { ui.revision=Number(rev.dataset.revision);render();return; }
-  const receiptButton = event.target.closest("[data-receipt]"); if (receiptButton) { const e=ui.deal.events.find(x=>x.type==='pack_compiled'&&x.payload.receipt.hash===receiptButton.dataset.receipt); if(e)download(e.payload.receipt,`${e.payload.receipt.task}-${e.payload.receipt.hash}.json`);return; }
+  const receiptButton = event.target.closest("[data-receipt]"); if (receiptButton) { const e=ui.deal.events.find(x=>x.type==='pack_compiled'&&x.payload.receipt.hash===receiptButton.dataset.receipt); if(e){download(e.payload.receipt,`${e.payload.receipt.task}-${e.payload.receipt.hash}.json`);notify(`Receipt ${e.payload.receipt.hash} downloaded.`,true);}return; }
   const actionEl = event.target.closest("[data-action]"); if (!actionEl) return;
   const action=actionEl.dataset.action;
   if(action==='approve'){const result=approveChange(ui.deal,actionEl.dataset.id,'Shashank Khan');ui.deal=result.deal;ui.revision=result.revision;persist();render();notify(`Revision ${result.revision} committed. ${result.invalidated.length} dependencies marked stale.`,true);}
   if(action==='reject'){ui.deal=rejectChange(ui.deal,actionEl.dataset.id,'Shashank Khan');persist();render();notify(`Candidate rejected. Accepted revision ${accepted().revision} is unchanged.`,true);}
-  if(action==='compile'){ui.task=actionEl.dataset.task||'commercial';ui.modal=true;render();setTimeout(()=>document.querySelector('.compiler-modal select')?.focus(),0);}
-  if(action==='close'){ui.modal=false;render();}
-  if(action==='seal'){const pack=compileContextPack(ui.deal,{task:ui.task,budget:ui.budget});if(pack.status==='blocked')return;const sealed=sealPack(ui.deal,pack,`a-${ui.task}-pack`);ui.deal=sealed.deal;ui.modal=false;ui.view='artifacts';persist();render();notify(`Context sealed at revision ${sealed.receipt.revision}: ${sealed.receipt.hash}`,true);}
+  if(action==='compile'){ui.task=actionEl.dataset.task||'commercial';ui.artifactId=actionEl.dataset.artifact||`a-${ui.task}-pack`;ui.modal=true;render();setTimeout(()=>document.querySelector('.compiler-modal select')?.focus(),0);}
+  if(action==='close'){ui.modal=false;render();setTimeout(()=>document.querySelector('[data-action="compile"]')?.focus(),0);}
+  if(action==='seal'){const pack=compileContextPack(ui.deal,{task:ui.task,budget:ui.budget});if(pack.status==='blocked')return;const sealed=sealPack(ui.deal,pack,ui.artifactId);ui.deal=sealed.deal;ui.modal=false;ui.view='artifacts';persist();render();notify(`Context sealed at revision ${sealed.receipt.revision}: ${sealed.receipt.hash}`,true);}
   if(action==='reset'){if(confirm('Reset the independent Threadline concept demo?')){localStorage.removeItem(STORAGE_KEY);ui.deal=deepClone(seedDeal);ui.view='review';ui.revision=17;render();}}
 });
 
-document.addEventListener("input", event => { if(event.target.id==='stateSearch'){ui.query=event.target.value;render();document.querySelector('#stateSearch')?.focus();} if(event.target.dataset.input==='budget'){ui.budget=Number(event.target.value);render();} });
+document.addEventListener("input", event => { if(event.target.id==='stateSearch'){const caret=event.target.selectionStart;ui.query=event.target.value;render();const next=document.querySelector('#stateSearch');next?.focus();next?.setSelectionRange(caret,caret);} if(event.target.dataset.input==='budget'){ui.budget=Number(event.target.value);render();} });
 document.addEventListener("change", event => { if(event.target.dataset.input==='task'){ui.task=event.target.value;render();} });
-document.addEventListener("keydown", event => { if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'){event.preventDefault();document.querySelector('#stateSearch')?.focus();} if(event.key==='Escape'&&ui.modal){ui.modal=false;render();} });
+document.addEventListener("keydown", event => {
+  if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'){event.preventDefault();document.querySelector('#stateSearch')?.focus();}
+  if(event.key==='Escape'&&ui.modal){ui.modal=false;render();setTimeout(()=>document.querySelector('[data-action="compile"]')?.focus(),0);}
+  if(event.key==='Tab'&&ui.modal){const focusable=[...document.querySelectorAll('.compiler-modal button:not(:disabled), .compiler-modal select, .compiler-modal input')];if(!focusable.length)return;const first=focusable[0],last=focusable.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}
+});
 
 render();
