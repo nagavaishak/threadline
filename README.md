@@ -20,19 +20,53 @@ An investment screen finds a contradiction:
 
 Threadline asks an investor to review the exact evidence. If the correction is approved, it creates a new accepted revision, identifies every output built with the old figure, and rebuilds that work from the corrected state.
 
-```text
-reviewed task output
-        ↓
-proposed correction + evidence
-        ↓
-human approve / reject
-        ↓
-accepted revision
-        ↓
-stale work identified
-        ↓
-bounded rebuild + verification receipt
+```mermaid
+flowchart TB
+    subgraph INPUTS["1. Information enters"]
+        CRM["CRM data"]
+        FILES["Pitch decks and files"]
+        CALLS["Founder calls and notes"]
+    end
+
+    subgraph DISCOVERY["2. Agent discovers"]
+        AGENT["Alludium analysis agent"]
+        CHANGE["Candidate change + supporting evidence"]
+    end
+
+    subgraph CONTROL["3. Threadline governs"]
+        REVIEW{"Human review"}
+        REJECT["Reject change<br/>Accepted state stays unchanged"]
+        COMMIT["Approve change<br/>Create new revision"]
+        STATE["Accepted deal state"]
+        DEPS["Dependency index"]
+        STALE["Mark affected work as stale"]
+        COMPILER["Context compiler<br/>Prepare approved information"]
+    end
+
+    subgraph EXECUTION["4. Agents continue"]
+        TASK["Relevant task agent"]
+        OUTPUT["Rebuilt memo, report or analysis"]
+        RECEIPT["Receipt + complete history"]
+    end
+
+    CRM --> AGENT
+    FILES --> AGENT
+    CALLS --> AGENT
+    AGENT --> CHANGE
+    CHANGE --> REVIEW
+    REVIEW -->|Reject| REJECT
+    REVIEW -->|Approve| COMMIT
+    COMMIT --> STATE
+    COMMIT --> DEPS
+    DEPS --> STALE
+    STATE --> COMPILER
+    STALE --> COMPILER
+    COMPILER --> TASK
+    TASK --> OUTPUT
+    OUTPUT --> RECEIPT
 ```
+
+**Information enters → an agent proposes → a human decides → Threadline governs → agents continue.**
 
 ## What the prototype demonstrates
 
