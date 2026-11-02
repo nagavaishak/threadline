@@ -143,7 +143,7 @@ function renderPage() {
       <button class="brand" data-go="intro"><span class="mark" aria-hidden="true"></span>Threadline</button>
       <nav class="nav">
         ${inDemo ? `<button class="text-button" data-action="restart">${icon("reset")} Start over</button>` : `<button class="text-button" data-go="demo">Demo</button>`}
-        <button class="text-button ${current === "architecture" ? "active" : ""}" data-go="architecture">How it's built</button>
+        <button class="text-button ${current === "architecture" ? "active" : ""}" data-go="architecture">How it works</button>
       </nav>
     </header>
     <main class="page ${["intro", "architecture"].includes(current) ? "wide" : ""}">${inDemo ? renderSteps(STEP[current]) : ""}${views[current]()}</main>
@@ -169,7 +169,7 @@ function renderIntro() {
     <p class="lead">AI now writes forecasts and emails straight from the CRM. When a fact changes, like a close date, those outputs quietly go out of date. Threadline remembers which facts each output used, so it can flag exactly the ones that need updating, and leave everything else alone.</p>
     <div class="actions">
       <button class="primary" data-go="demo">${resume ? "Continue the demo" : "Try the 2-minute demo"} ${icon("arrow")}</button>
-      <button class="secondary" data-go="architecture">How it would be built</button>
+      <button class="secondary" data-go="architecture">How it would work</button>
       ${resume ? `<button class="text-button" data-action="restart">${icon("reset")} Start over</button>` : ""}
     </div>
   </section>
