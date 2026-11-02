@@ -171,18 +171,17 @@ h1, h2 { margin: 0; letter-spacing: -0.02em; }
 .diagram figcaption { margin-top: 8px; color: var(--muted); font-size: 15px; }
 .flow { margin: 20px 0 0; padding: 0; list-style: none; display: grid; gap: 12px; }
 .flow li { padding: 20px 22px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); display: flex; gap: 16px; align-items: flex-start; }
-.flow li.adds { border-color: #c9c5f6; }
+.flow li.adds, .flow li.both { border-color: #c9c5f6; }
 .flow .num { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; flex: none; background: #efeee9; font-weight: 800; }
-.flow li.adds .num { background: var(--accent); color: white; }
+.flow li.adds .num, .flow li.both .num { background: var(--accent); color: white; }
 .flow h3 { margin: 0; font-size: 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .flow h3 em { padding: 3px 10px; border-radius: 999px; background: #efeee9; color: var(--muted); font-size: 13px; font-style: normal; font-weight: 700; }
-.flow li.adds h3 em { background: var(--accent-soft); color: var(--accent); }
+.flow li.adds h3 em, .flow li.both h3 em { background: var(--accent-soft); color: var(--accent); }
 .flow p { margin-top: 4px; font-size: 18px; }
 .table { margin-top: 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); overflow: hidden; }
 .table .row { display: grid; grid-template-columns: 1.3fr 1.1fr 1fr 1fr; gap: 12px; padding: 12px 18px; border-top: 1px solid var(--line); font-size: 17px; }
 .table .row.head { border-top: 0; background: #faf9f6; color: var(--muted); font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
-.cards { margin-top: 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
-.cards.two { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.cards { margin-top: 18px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
 .cards .card { margin-top: 0; }
 .card h3 { margin: 0; font-size: 20px; }
 .card h3 + p { margin-top: 8px; font-size: 17px; color: var(--muted); }
@@ -224,6 +223,7 @@ h1, h2 { margin: 0; letter-spacing: -0.02em; }
   .closing { padding: 24px; }
   .nav .text-button { padding: 8px 10px; font-size: 15px; }
   .table .row { grid-template-columns: 1fr 1fr; }
+  .cards { grid-template-columns: 1fr; }
   .table .row.head span:nth-child(n+3) { display: none; }
   .table .row:not(.head) span:nth-child(n+3) { color: var(--muted); font-size: 15px; }
   .callout p:not(.label) { font-size: 19px; }

@@ -231,7 +231,7 @@ function renderArchitecture() {
   const flow = [
     ["Capture", "Emails, calendar events and calls land on the right deal.", "existing", "product"],
     ["Propose", "An agent suggests a field change, with the buyer's exact words and any hedge.", "existing", "trust"],
-    ["Approve", "A person approves judgment fields like close date. The approval card also says what will go out of date.", "adds", "trust"],
+    ["Approve", "A person approves judgment fields like close date. Threadline adds one line to the approval card: what will go out of date.", "both", "trust"],
     ["Save a new version", "The change is added, never written over. Earlier values and their reasons stay.", "adds"],
     ["Find what used it", "One indexed lookup goes from the changed field to every output that read it.", "adds"],
     ["Update", "Drafts are rewritten and reports re-run, each with a diff for review. Anything already sent is never changed; it's flagged instead.", "adds"]
@@ -278,7 +278,7 @@ function renderArchitecture() {
         <div class="box strong wide"><b>Invalidation worker</b><span>Look up every output that read this field, or asked a question it now answers · mark them out of date</span></div>
         <div class="down" aria-hidden="true">${icon("arrow")}</div>
         <div class="box strong wide"><b>Rewrite workers</b><span>Group changes per output · context builder records every read · model writes · diff goes back for review</span></div>
-        <figcaption>Grey is what an AI CRM already has. Dark is what Threadline adds.</figcaption>
+        <figcaption>Grey is what an AI CRM already has. Blue is what Threadline adds.</figcaption>
       </figure>
     </section>
 
@@ -287,7 +287,7 @@ function renderArchitecture() {
       <p class="sub">Ahoy already describes steps 1 and 2, and the approval itself in step 3, publicly. Threadline adds the rest.</p>
       <ol class="flow">${flow.map(([title, text, kind, source], index) => `<li class="${kind}">
         <span class="num">${index + 1}</span>
-        <div><h3>${title} <em>${kind === "existing" ? "Ahoy already does this" : "Threadline adds"}</em></h3><p>${text}</p>${source ? `<p class="small">Source: ${cite(source)}</p>` : ""}</div>
+        <div><h3>${title} <em>${kind === "existing" ? "Ahoy already does this" : kind === "both" ? "Ahoy approves · Threadline adds the impact" : "Threadline adds"}</em></h3><p>${text}</p>${source ? `<p class="small">Source: ${cite(source)}</p>` : ""}</div>
       </li>`).join("")}</ol>
     </section>
 
@@ -350,7 +350,7 @@ function renderArchitecture() {
 
     <section class="section">
       <h2>Choices I'd make on purpose</h2>
-      <div class="cards two">
+      <div class="cards">
         <div class="card"><h3>Field-level reads for judgment fields</h3><p>Precise, so no false alarms on the fields that move money. Elsewhere, record-level reads are cheaper and good enough.</p></div>
         <div class="card"><h3>Recorded, not declared</h3><p>Reads are captured as they happen, not listed by hand per template. Lists by hand go stale; a check enforces that nothing reads around the builder.</p></div>
         <div class="card"><h3>Flag now, rewrite later</h3><p>Flags appear instantly and cost almost nothing. Rewrites wait until someone needs the output, which keeps model cost tied to real use.</p></div>
