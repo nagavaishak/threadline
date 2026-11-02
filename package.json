@@ -1,6 +1,6 @@
 {
-  "name": "threadline-deal-state-engine",
-  "version": "3.0.0",
+  "name": "threadline",
+  "version": "4.0.0",
   "private": true,
   "type": "module",
   "scripts": {

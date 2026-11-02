@@ -1,103 +1,69 @@
 # Threadline architecture
 
-Threadline is an independent, integration-ready product concept. The current repository proves the state-transition behavior locally; it does not claim access to private Alludium APIs or production customer data.
-
-## What is implemented now
+## What exists today
 
 ```text
 Static browser application
-├── Guided product experience        app.js + compat.css
-├── Deterministic deal-state engine  core.js
-├── Fictional AsterOS fixtures       seedDeal in core.js
-├── Local state persistence          browser localStorage
-├── Downloadable JSON receipts       browser Blob export
-└── Domain-invariant test suite       node:test
+├── Guided walkthrough           app.js + compat.css
+├── Deterministic event engine   core.js
+├── Fictional pipeline fixtures  seedPipeline, reversalEmail in core.js
+├── Persistence                  store.js: localStorage + version token + navigator.locks
+└── Invariant tests              node:test (tests/core.test.js, tests/store.test.js)
 ```
 
-The domain engine is real rather than a sequence of mocked screens. It implements:
+The engine is real, not a sequence of mocked screens. Everything the UI shows is derived from one append-only event log:
 
-- pending changes isolated from accepted state;
-- explicit human approval and rejection;
-- append-only revision events;
-- dependency invalidation;
-- revision replay;
-- policy-bounded context compilation;
-- fail-closed required context;
-- deterministic context receipts;
-- idempotent task-output ingestion.
+| Event | Meaning |
+|---|---|
+| `task_output_ingested` | An agent finished reading a call or email. Deduplicated by `externalId`. |
+| `change_proposed` | A proposed new value for one field, with evidence, hedge and base revision. |
+| `change_approved` / `change_rejected` | A person's decision. |
+| `revision_committed` | The accepted value of one field at a new revision. |
+| `artifact_invalidated` | An output read the old value; the reason names the field, value and revisions. |
+| `output_rebuilt` | A regenerated output: new content and reads, the previous version and a receipt. |
 
-The repository intentionally uses no production database, authentication system, model provider or Alludium connection. Those would be misleading without access to Alludium's internal contracts.
-
-## Proposed production shape
+## How it could work in production
 
 ```text
-Alludium task output / file / CRM update
-                     │
-                     ▼
-             Task-output adapter
-                     │ normalizes typed events
-                     ▼
-         Append-only deal event store
-          PostgreSQL + immutable evidence
-                     │
-          ┌──────────┴───────────┐
-          ▼                      ▼
-  State projection         Dependency index
-  accepted revision        output → claim revision
-          │                      │
-          └──────────┬───────────┘
-                     ▼
-           Human review boundary
-        propose → approve / reject → commit
-                     │
-          ┌──────────┴───────────┐
-          ▼                      ▼
-  Context compiler        Invalidation events
-  policy + permissions    stale output + reason
-          │                      │
-          └──────────┬───────────┘
-                     ▼
-        Alludium task / agent execution
-                     │
-                     ▼
-       output + deterministic receipt
+calls / email / meetings
+          │
+          ▼
+  capture + agents ── propose ──► field_proposals (evidence, hedge, base_version)
+                                         │
+                              human approve / reject
+                                         │  one transaction:
+                                         ▼  compare-and-set on field version
+                                 field_events (append-only)
+                                         │
+                         ┌───────────────┴───────────────┐
+                         ▼                               ▼
+                 field projection              output_reads index
+                 (current values)              (output, record, field, version)
+                                                         │
+                                          outbox: invalidate dependents
+                                                         │
+                                                         ▼
+                                     regeneration worker (lazy, idempotent)
+                                                         │
+                                                         ▼
+                                     context assembler ──► generator (LLM)
+                                     records every read     output + diff + receipt
 ```
 
-### Suggested components
+### Design choices
 
-| Concern | Production choice | Why |
+| Concern | Choice | Why |
 |---|---|---|
-| Canonical events | PostgreSQL append-only event table | Transactions, auditability and point-in-time replay |
-| Current state | Materialized projections in PostgreSQL | Fast reads without losing event history |
-| Evidence files | Alludium artifact storage or object storage | Immutable source payloads with stable locators |
-| Async work | Alludium Operations or a durable job queue | Recompilation and invalidation should be retryable |
-| Authorization | Alludium project and task permissions | Context must be compiled within the caller's scope |
-| Context compiler | Deterministic service or platform operation | Same revision, policy and inputs produce the same receipt |
-| Integration | Typed Alludium task-output and stage-change events | Idempotent ingestion without screen scraping |
-| Observability | Structured events, traces and receipt hashes | Explain what changed and what every output used |
+| **Field history** | Append-only `field_events` table, with projections for current values | Reversals stay visible, and point-in-time replay is a query |
+| **Dependency capture** | Every generator gets context from one assembler, which writes `output_reads` rows | Dependencies are recorded when something is read, not declared by hand |
+| **Invalidation** | Approval and invalidation in one transaction, with an outbox event for regeneration | A committed change can never leave dependents unmarked |
+| **Concurrency** | Compare-and-set on the field version at approval | Two reviewers can't both win, and a stale proposal is refused |
+| **Ingestion** | Idempotency key per source message | Retries and duplicate webhooks don't create duplicate proposals |
+| **Regeneration** | Lazy (when an output is opened or scheduled), not eager | Saves LLM cost on fan-out: one field can feed many reports |
+| **Sent outputs** | Never rewritten; flagged "sent with old value", with a suggested correction | An email that already went out can't be edited after the fact |
+| **Pending changes** | Outputs that read a field with a pending proposal show as *at risk* | Nobody forwards a forecast while its approval is still in the queue |
 
-## Minimum integration contract
-
-Threadline would need five platform operations rather than a new parallel application:
-
-```text
-ingest_task_output(output, external_id)
-propose_state_change(claim, evidence, base_revision)
-approve_or_reject_change(proposal_id, actor)
-compile_task_context(task_policy, revision, budget, permissions)
-record_compiled_output(artifact_id, receipt)
-```
-
-All writes must be idempotent. Approval must compare the proposal's base revision with the latest accepted revision and fail if it is stale. Context compilation must exclude unapproved candidate values and block when required claims cannot fit.
-
-## What a real pilot should validate
-
-Before building the full backend, run a retrospective pilot on completed deals:
-
-1. Reconstruct the important facts available at screening, diligence and IC.
-2. Identify definition changes or corrections between those stages.
-3. Measure whether investors can trace an IC claim to evidence in under 30 seconds.
-4. Check whether Threadline finds outputs that should have been refreshed.
-5. Compare a bounded context pack with the context the task actually received.
-
-The next engineering decision should follow that workflow validation. The current prototype is sufficient for a product conversation; the architecture above demonstrates that it can become a production primitive rather than remaining a visual concept.
+### What to measure
+- **Read-set coverage:** the share of generated outputs with a complete read record. An eval should fail if a generator reads a field without going through the assembler.
+- **Time from approval to stale flag,** and how many stale outputs were opened or sent before being regenerated.
+- **Close-date moves per deal** over a window. Volatility is a forecast signal in its own right.

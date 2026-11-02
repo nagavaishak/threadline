@@ -1,85 +1,52 @@
 # Threadline
 
-**A deal-state layer for AI-native investment teams.**
+**When a reviewed CRM field changes, which AI-written outputs still rely on the old value?**
 
-[Live product](https://threadline-vc.vercel.app) · [Production architecture](ARCHITECTURE.md)
+Threadline records which fields every generated output read, and at which revision. When a person approves a change, only the outputs that read that field go stale. Each one regenerates with a before/after diff, and unrelated work stays current.
 
-> Independent concept using fictional AsterOS data. Not affiliated with or integrated into Alludium.
+> Independent prototype with fictional data. The scenario follows the close-date example in Kevin Bluett's public guide [“Can you trust a CRM record the AI wrote?”](https://ahoy.ai/guides/trust-ai-written-crm-records/). It is not affiliated with Ahoy.
 
-![Threadline product overview](preview-v4-overview.png)
-
-Alludium helps people and agents complete investment work together. Threadline explores the handoff after that work is reviewed: how a material correction becomes shared, versioned deal state before another task relies on it.
+![Dependent outputs after the close date moved: the forecast is regenerated with a diff, the email draft is stale, the unrelated account brief is unaffected](preview-outputs.jpg)
 
 ## The scenario
 
-An investment screen finds a contradiction:
+1. **A hedged change.** On a call the buyer says *“We're probably going to revisit this in Q4.”* An agent proposes moving the Halden Freight close date from 30 Sep to 15 Dec. The proposal keeps the quote and notes that the date is the agent's reading, not something the buyer said.
+2. **What relied on it.** Before approval, the Q3 forecast and a drafted follow-up email are shown as *at risk*. After approval they are *stale*, each showing the value it actually read. The Orrin Health account brief never read the field, so it stays current.
+3. **Regenerate.** Each stale output is rebuilt from accepted state with a diff. For example, the forecast's Q3 commit drops from $200k across 2 deals to $80k across 1, and the hedge travels with the value.
+4. **The reversal.** Two weeks later an email says *“Can we pick this back up for October?”* The second move is reviewed the same way. It doesn't overwrite the first: the field's history shows both moves, and the regenerated forecast says the close date has moved twice.
 
-- The pitch deck reports **€4.2m qualified pipeline**.
-- The CRM supports only **€1.8m sales-accepted pipeline**.
-- A founder call confirms the two sources use different definitions of “qualified.”
+## What the prototype guarantees
 
-Threadline asks an investor to review the exact evidence. If the correction is approved, it creates a new accepted revision, identifies every output built with the old figure, and rebuilds that work from the corrected state.
+Each guarantee is covered by tests in [`tests/core.test.js`](tests/core.test.js) and [`tests/store.test.js`](tests/store.test.js), and the walkthrough was also checked by hand in a browser.
 
-```mermaid
-flowchart TB
-    subgraph INPUTS["1. Information enters"]
-        CRM["CRM data"]
-        FILES["Pitch decks and files"]
-        CALLS["Founder calls and notes"]
-    end
+- **Pending values never reach accepted state or any output text.** An output that reads a field with a pending change is flagged *at risk*; its text is unchanged.
+- **Invalidation is selective.** An output goes stale only if a committed revision changes a field it recorded reading.
+- **Outputs change only through an explicit rebuild,** and the previous version is kept for the diff.
+- **A rebuild uses the output's own generator policy,** so a rebuild can't quietly change what the output depends on.
+- **A reversal never erases the earlier move or its hedge.**
+- **Every approval and rejection appears in history** at the revision it applied to.
+- **Approval is compare-and-set** on the base revision: a proposal made against an older revision is refused.
+- **Ingestion is idempotent** by external id: the same email can't create a second proposal.
+- **Saved progress survives reload, leaving and returning, and new tabs.** Every save carries a fresh version, and a tab writes only if storage still holds the version it last saw, so a tab that missed another tab's save is refused instead of overwriting it. Empty or corrupt storage is repaired, never adopted. Storage read and write failures are shown, never mistaken for another tab or silently dropped.
 
-    subgraph DISCOVERY["2. Agent discovers"]
-        AGENT["Alludium analysis agent"]
-        CHANGE["Candidate change + supporting evidence"]
-    end
+## How it works
 
-    subgraph CONTROL["3. Threadline governs"]
-        REVIEW{"Human review"}
-        REJECT["Reject change<br/>Accepted state stays unchanged"]
-        COMMIT["Approve change<br/>Create new revision"]
-        STATE["Accepted deal state"]
-        DEPS["Dependency index"]
-        STALE["Mark affected work as stale"]
-        COMPILER["Context compiler<br/>Prepare approved information"]
-    end
+- [`core.js`](core.js) is a deterministic, append-only event log: proposals, reviews, committed revisions, invalidations and rebuilds. Accepted state, output status and history are all derived from it.
+- Each output stores `used`: the field, revision and value it read. Approval marks stale exactly the outputs whose `used` includes the changed field.
+- Outputs are generated by deterministic templates (`renderOutput`). There is no LLM. A test checks that the seed outputs equal their templates.
+- Rebuilding goes through one context compiler that includes required fields first and fails closed if they don't fit the budget. The receipt records what the output was given.
+- [`store.js`](store.js) saves the log to `localStorage` with a version token, doing the check and the write inside a cross-tab lock (`navigator.locks`) where the browser supports it. Tabs re-check on storage events and when they become visible again.
+- [`app.js`](app.js) renders the guided walkthrough.
 
-    subgraph EXECUTION["4. Agents continue"]
-        TASK["Relevant task agent"]
-        OUTPUT["Rebuilt memo, report or analysis"]
-        RECEIPT["Receipt + complete history"]
-    end
+## What it does not do
 
-    CRM --> AGENT
-    FILES --> AGENT
-    CALLS --> AGENT
-    AGENT --> CHANGE
-    CHANGE --> REVIEW
-    REVIEW -->|Reject| REJECT
-    REVIEW -->|Approve| COMMIT
-    COMMIT --> STATE
-    COMMIT --> DEPS
-    DEPS --> STALE
-    STATE --> COMPILER
-    STALE --> COMPILER
-    COMPILER --> TASK
-    TASK --> OUTPUT
-    OUTPUT --> RECEIPT
-```
+- **Browser only:** no server, database, shared state or auth. Persistence is one browser's `localStorage`.
+- **No LLM or real CRM:** the agents, calls and emails are fixtures, and outputs come from templates.
+- **Reads are recorded only for outputs built through the compiler.** Nothing discovers dependencies elsewhere.
+- **The receipt hash is a 32-bit FNV-1a of the receipt body.** It is a deterministic fingerprint, not a signature.
+- **Clicks in two tabs at the same instant can still race.** The tests prove the version check. `navigator.locks` narrows the window where browsers provide it, but it doesn't order localStorage caches across processes, and it is absent in insecure contexts.
 
-**Information enters → an agent proposes → a human decides → Threadline governs → agents continue.**
-
-## What the prototype demonstrates
-
-- AI-proposed values remain outside accepted state until human approval.
-- Approval creates an append-only revision; rejection leaves accepted state unchanged.
-- Material changes invalidate dependent outputs with an explicit reason.
-- Context compilation blocks when required information cannot fit the budget.
-- Rebuilt outputs receive deterministic, downloadable verification receipts.
-- Revision replay preserves what the firm believed at each point in time.
-- Alludium-style task-output ingestion is idempotent.
-- Nine domain-invariant tests protect the workflow.
-
-The state engine is implemented in [`core.js`](core.js). External integrations use realistic fixtures because this project has no access to private Alludium APIs or customer data. [`ARCHITECTURE.md`](ARCHITECTURE.md) describes how the concept could become a production platform primitive.
+[`ARCHITECTURE.md`](ARCHITECTURE.md) describes how this could become a production service.
 
 ## Run locally
 
@@ -87,4 +54,10 @@ The state engine is implemented in [`core.js`](core.js). External integrations u
 npm run serve
 ```
 
-Open `http://localhost:4173`. Run the tests with `npm test`.
+Then open `http://localhost:4173`.
+
+Run the tests (Node 20 or newer; there are no dependencies):
+
+```bash
+npm test
+```
