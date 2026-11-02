@@ -233,24 +233,36 @@ function renderArchitecture() {
     ["Propose", "An agent suggests a field change, with the buyer's exact words and any hedge.", "existing", "trust"],
     ["Approve", "A person approves judgment fields like close date. Threadline adds one line to the approval card: what will go out of date.", "both", "trust"],
     ["Save a new version", "The change is added, never written over. Earlier values and their reasons stay.", "adds"],
-    ["Find what used it", "One indexed lookup goes from the changed field to every output that read it.", "adds"],
+    ["Find what used it", "Indexed lookups go from the changed field to every output that was given it, and to every list it entered or left.", "adds"],
     ["Update", "Drafts are rewritten and reports re-run, each with a diff for review. Anything already sent is never changed; it's flagged instead.", "adds"]
   ];
   const deep = [
-    ["Consistency: a change can never land without its flags",
-      "Saving the new version and recording “this field changed” happen in one database transaction (a transactional outbox). A background worker reads the outbox and flags dependents. If the worker crashes, it picks up where it left off; nothing is lost and nothing is flagged twice."],
+    ["Consistency: no change is ever left unflagged",
+      "Saving the new version and a “field changed” note happen in one database transaction (a transactional outbox). A worker then flags dependents, retrying until it succeeds, and flagging the same output twice is harmless. Until the flag lands, anything about to be shown or sent re-checks its inputs first."],
+    ["Freshness: a rewrite only counts if its inputs are still current",
+      "A rewrite records the exact versions it was built from. When it finishes, it becomes the current version only if those inputs haven't changed meanwhile, including which deals are in its lists. Otherwise it is kept as an older draft and a new rewrite is queued."],
     ["Fan-out: one field can feed hundreds of outputs",
-      "Flagging is cheap and instant: one indexed lookup and a status update. Rewriting is expensive, so it is grouped. If five deals change within a couple of minutes, the Q3 forecast is rewritten once, after things settle, not five times."],
+      "Flagging is cheap: a lookup and a status update. Rewriting is expensive, so it is grouped: if five deals change within a couple of minutes, the Q3 forecast is rewritten once, with a maximum wait so constant changes can't delay it forever."],
     ["Cost: only call the model when it matters",
-      "Outputs are rewritten lazily: when someone opens them, or just before they're due to be sent. Each job is keyed by the output and a fingerprint of its inputs, so if the inputs end up unchanged (a change and its reversal), no model call happens. Parts that are just numbers are re-rendered without a model at all."],
+      "Rewrites happen when someone opens an output or just before it's due to be sent. Jobs are keyed by a fingerprint of the whole context (facts, history, permissions, prompt version), so identical inputs reuse the last result. Parts that are just numbers re-render without a model. Cost is roughly changes × affected outputs × rewrites actually needed × tokens."],
     ["Retries: safe to run twice",
-      "Because jobs are keyed by output and input fingerprint, a retry after a timeout does the same work and lands the same result. A failed rewrite leaves the output flagged as out of date, never half-updated."],
+      "Model calls can return different text each time, so retries aren't identical. Instead, the first completed result for a job wins and is saved; a late duplicate can't publish a second version. Retries are capped, failures go to a recovery queue, and the output stays flagged rather than half-updated."],
+    ["Who owns a field when sync and AI disagree",
+      "With two-way HubSpot sync, each field needs an owner and a source version. A late or echoed sync update can't silently replace a value a person approved; conflicts become a review item, not a race."],
+    ["Lists, calculations, deletes and merges",
+      "Besides single fields, an output can depend on a list (deals closing in Q3), a calculation (weighted pipeline) or a record that is later deleted or merged. Each of these is recorded and checked against both the old and the new value, so deals leaving a list count as much as deals joining it."],
+    ["Permissions",
+      "Outputs, their history and their diffs are only shown to people allowed to see every fact inside them. A diff can't reveal a value someone wasn't allowed to read."],
+    ["Existing outputs and rollout safety",
+      "Outputs written before Threadline have no read record, so they show as “freshness unknown” until rebuilt, never as current."],
     ["Many customers on one system",
-      "Every row carries a team id, every index starts with it, and model calls have a per-team budget, so one busy team can't slow down another."],
+      "Every row carries a team id and every index starts with it. Per-team limits on worker concurrency, queue share and model spend stop one busy team from slowing others."],
     ["Rough size",
-      "A team with 1,000 open deals and about 10 AI outputs per deal, each reading about 10 facts, is roughly 100,000 read rows. That is small for Postgres, and it grows in a straight line with usage."],
+      "A team with 1,000 open deals and about 10 AI outputs per deal, each given about 10 facts, is roughly 100,000 read rows, before history and indexes. That's small for Postgres, and it grows in a straight line with usage."],
+    ["Checking quality",
+      "Diffs compare the facts that changed, not just the prose, and keep untouched sections untouched. Evals check that rewrites use the new value, keep the buyer's hedge, invent nothing, respect permissions and don't rewrite unrelated text, run several times per case because output varies."],
     ["Watching it in production",
-      "Track how long outputs stay out of date, how many were opened or sent while out of date, rewrite cost per team, and how many outputs have a complete read record. Trace each approval through to the flags and rewrites it caused."]
+      "Track how long outputs stay out of date, how many were opened or sent while out of date, missed and unnecessary flags, queue age, and cost per useful rewrite. Trace each approval through to the flags and rewrites it caused."]
   ];
   return `<section class="arch">
     <p class="eyebrow">Architecture</p>
@@ -275,9 +287,9 @@ function renderArchitecture() {
         <div class="down" aria-hidden="true">${icon("arrow")}</div>
         <div class="box strong wide"><b>Postgres, one transaction</b><span>Add the new field version · write “field changed” to the outbox</span></div>
         <div class="down" aria-hidden="true">${icon("arrow")}</div>
-        <div class="box strong wide"><b>Invalidation worker</b><span>Look up every output that read this field, or asked a question it now answers · mark them out of date</span></div>
+        <div class="box strong wide"><b>Invalidation worker</b><span>Find every output given this field, or with a list it entered or left · mark them out of date</span></div>
         <div class="down" aria-hidden="true">${icon("arrow")}</div>
-        <div class="box strong wide"><b>Rewrite workers</b><span>Group changes per output · context builder records every read · model writes · diff goes back for review</span></div>
+        <div class="box strong wide"><b>Rewrite workers</b><span>Group changes per output · context builder records every input · model writes · publish only if inputs are still current · diff goes back for review</span></div>
         <figcaption>Grey is what an AI CRM already has. Blue is what Threadline adds.</figcaption>
       </figure>
     </section>
@@ -293,7 +305,7 @@ function renderArchitecture() {
 
     <section class="section">
       <h2>The key piece: record what each output read</h2>
-      <p>Every AI output gets its facts from one context builder. That builder also writes down each fact it handed over, with its version, so nothing can use a field without it being recorded. An automated check fails if any generator reads data some other way.</p>
+      <p>Every AI output gets its facts from one context builder. That builder also writes down each fact it handed over, with its version. This is deliberately cautious: it records what an output was given, not what it relied on, so it may flag a little more than strictly needed, but never less. Generators can only get data through the builder, and tests include deliberately missed reads to prove the check catches them.</p>
       <div class="table" role="table" aria-label="Example of recorded reads">
         <div class="row head" role="row"><span role="columnheader">Output</span><span role="columnheader">Deal</span><span role="columnheader">Field</span><span role="columnheader">Version read</span></div>
         <div class="row" role="row"><span role="cell">Q3 forecast</span><span role="cell">Halden Freight</span><span role="cell">Close date</span><span role="cell">v1 · 30 Sep</span></div>
@@ -303,7 +315,7 @@ function renderArchitecture() {
       <p class="small">When the Halden close date moves to v2, the lookup returns the first two rows and nothing else.</p>
       <div class="callout soft">
         <p class="label">The case most designs miss</p>
-        <p>A forecast doesn't only read Halden's close date. It reads <b>“every deal closing in Q3”</b>. If another deal moves <i>into</i> Q3, the forecast must update too, even though it never read that deal before. So the context builder also records the question it asked, like “open deals in this pipeline closing in Q3”, and every approved change is checked against those questions as well as against individual reads.</p>
+        <p>A forecast doesn't only read Halden's close date. It reads <b>“every deal closing in Q3”</b>. If another deal moves <i>into</i> Q3, the forecast must update too, even though it never read that deal before. And if a deal moves <i>out</i> of Q3, the forecast must update just as much. So the context builder also records the question it asked, like “open deals in this pipeline closing in Q3”, and every approved change is checked against it using both the old and the new value.</p>
       </div>
     </section>
 
@@ -321,14 +333,12 @@ function renderArchitecture() {
       <h2>What must always be true</h2>
       <ul class="plain check">
         <li>An unapproved suggestion never reaches a forecast, an email or any other output.</li>
-        <li>Only outputs that used the changed field, or asked a question it now answers, are flagged.</li>
-        <li>A change and its flags are saved together, or not at all.</li>
-        <li>If two people approve at once, only one wins. The other is shown the newer version.</li>
-        <li>The same email or call, processed twice, creates one suggestion, not two.</li>
-        <li>Something already sent is never rewritten.</li>
-        <li>History is never overwritten, so a deal that moved twice shows two moves.</li>
+        <li>Every approved change is eventually flagged on everything that was given it, and anything about to be shown or sent checks its inputs first.</li>
+        <li>A rewrite becomes current only if its inputs are still current when it finishes.</li>
+        <li>If two people approve the same field at once, only one wins. The other is shown the newer version.</li>
+        <li>Something already sent is never rewritten, and history is never overwritten.</li>
       </ul>
-      <p class="small">The demo's engine enforces the ones it can in a browser, with 31 automated tests.</p>
+      <p class="small">The demo's engine enforces what it can in one browser, with 31 automated tests. It checks a whole-pipeline revision on approval; production would check per field.</p>
     </section>
 
     <section class="section">
@@ -351,9 +361,9 @@ function renderArchitecture() {
     <section class="section">
       <h2>Choices I'd make on purpose</h2>
       <div class="cards">
-        <div class="card"><h3>Field-level reads for judgment fields</h3><p>Precise, so no false alarms on the fields that move money. Elsewhere, record-level reads are cheaper and good enough.</p></div>
+        <div class="card"><h3>Field-level reads for judgment fields</h3><p>Fewer unnecessary flags on the fields that move money. Elsewhere, record-level reads are cheaper and good enough.</p></div>
         <div class="card"><h3>Recorded, not declared</h3><p>Reads are captured as they happen, not listed by hand per template. Lists by hand go stale; a check enforces that nothing reads around the builder.</p></div>
-        <div class="card"><h3>Flag now, rewrite later</h3><p>Flags appear instantly and cost almost nothing. Rewrites wait until someone needs the output, which keeps model cost tied to real use.</p></div>
+        <div class="card"><h3>Flag now, rewrite later</h3><p>Flags appear within seconds and cost almost nothing. Rewrites wait until someone needs the output, which keeps model cost tied to real use.</p></div>
         <div class="card"><h3>Never touch what was sent</h3><p>A sent email is a fact about the past. It gets flagged “sent with the old date”, with a suggested follow-up, instead of being edited.</p></div>
       </div>
     </section>
@@ -361,12 +371,17 @@ function renderArchitecture() {
     <section class="section">
       <h2>How I'd roll it out</h2>
       <ol class="phases">
-        <li><b>Shadow mode.</b> Record reads and work out what would go out of date, without showing anything. Compare it with what reps actually fixed by hand.</li>
+        <li><b>Shadow mode, one workflow.</b> Record reads for the forecast summary and one email draft, and work out what would go out of date without showing anything. Compare it with what reps actually fixed by hand, with model spend capped.</li>
         <li><b>Flags.</b> Show "out of date" on the forecast summary when a field it read changes, behind a per-pipeline switch.</li>
         <li><b>Impact before approval.</b> Add "this will affect…" to the approval card for close date changes.</li>
         <li><b>Rewrites with a diff.</b> Regenerate out-of-date drafts and send them back through approval.</li>
       </ol>
-      <p>Success looks like this: nearly every output has a complete read record, almost nothing is opened or sent while out of date, and close-date moves become a signal reps actually see.</p>
+      <p>Success looks like this: nearly every output has a complete read record, few unnecessary flags, almost nothing opened or sent while out of date, and close-date moves become a signal reps actually see. Not built until this works: tracking for arbitrary queries, or a general workflow engine.</p>
+    </section>
+
+    <section class="section">
+      <h2>Questions you'd likely ask</h2>
+      <div class="details"><details><summary>Why not just regenerate everything when anything changes?</summary><p>Selective updates save reviewers' attention and model spend. Shadow mode measures that saving against the cost of tracking reads before anything ships.</p></details><details><summary>What if the field changes again while a rewrite is running?</summary><p>The rewrite finishes, sees its inputs are no longer current, and is kept as an older draft. A fresh rewrite is queued. A stale result is never published as current.</p></details><details><summary>How do you know the read records are complete?</summary><p>Generators can only get data through the context builder, lists are recorded as questions, and the test suite includes deliberately missed reads to prove they're caught.</p></details><details><summary>Does approving the close date mean the rewritten email is correct?</summary><p>No. Approval covers the fact and its evidence, not the new prose. Rewrites go through evals and the team's normal review settings.</p></details><details><summary>What has the prototype actually proved?</summary><p>That dependency tracking, selective flags and full history work deterministically in one browser. It hasn't proved distributed consistency, model quality or behaviour under real concurrency; that's what shadow mode is for.</p></details></div>
     </section>
 
     <section class="section">

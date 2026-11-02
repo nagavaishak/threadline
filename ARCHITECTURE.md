@@ -56,8 +56,8 @@ calls / email / meetings
 |---|---|---|
 | **Field history** | Append-only `field_events` table, with projections for current values | Reversals stay visible, and point-in-time replay is a query |
 | **Dependency capture** | Every generator gets context from one assembler, which writes `output_reads` rows | Dependencies are recorded when something is read, not declared by hand |
-| **Invalidation** | Approval and invalidation in one transaction, with an outbox event for regeneration | A committed change can never leave dependents unmarked |
-| **Concurrency** | Compare-and-set on the field version at approval | Two reviewers can't both win, and a stale proposal is refused |
+| **Invalidation** | The new version and a "field changed" outbox row in one transaction; an idempotent worker flags dependents, and reads/sends re-check freshness until it does | A committed change is never left unflagged |
+| **Concurrency** | Compare-and-set on the field version at approval; a rewrite publishes only if its input versions are still current | Two reviewers can't both win, and a stale rewrite is never shown as current |
 | **Ingestion** | Idempotency key per source message | Retries and duplicate webhooks don't create duplicate proposals |
 | **Regeneration** | Lazy (when an output is opened or scheduled), not eager | Saves LLM cost on fan-out: one field can feed many reports |
 | **Sent outputs** | Never rewritten; flagged "sent with old value", with a suggested correction | An email that already went out can't be edited after the fact |
