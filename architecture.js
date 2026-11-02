@@ -1,152 +1,102 @@
-// The "How it works" page: an animated flow you can step through and an interactive dependency map.
-// Plain HTML and CSS, no libraries; mountArchitecture wires up behaviour after render.
+// The "How I'd build it" page: the stack, the tables that matter, and the phases.
+// Plain HTML and CSS, no libraries. These are proposed choices, not a claim about Ahoy's stack.
 
 const esc = value => String(value ?? "").replace(/[&<>'"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
 
 const PATHS = {
-  phone: '<path d="M6 3h4l2 5-2.5 1.5a11 11 0 0 0 5 5L16 12l5 2v4a2 2 0 0 1-2 2A17 17 0 0 1 4 5a2 2 0 0 1 2-2"/>',
+  screen: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
+  api: '<path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/>',
+  db: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
+  queue: '<path d="M4 6h16M4 12h16M4 18h10"/>',
+  worker: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>',
   spark: '<path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>',
   check: '<path d="m5 12 4 4L19 7"/>',
-  db: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
-  search: '<circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/>',
-  file: '<path d="M7 3h7l4 4v14H7zM14 3v5h5M10 12h5M10 16h5"/>',
-  refresh: '<path d="M20 11a8 8 0 0 0-14-4.5L4 9m0-5v5h5M4 13a8 8 0 0 0 14 4.5L20 15m0 5v-5h-5"/>',
-  play: '<path d="M8 5v14l11-7z"/>',
-  back: '<path d="M15 6l-6 6 6 6"/>',
-  next: '<path d="m9 6 6 6-6 6"/>'
+  gauge: '<path d="M4 18a8 8 0 1 1 16 0M12 18l4-6"/>',
+  back: '<path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/>'
 };
 const glyph = name => `<svg class="glyph" viewBox="0 0 24 24" aria-hidden="true">${PATHS[name]}</svg>`;
 
-const FLOW = [
-  { icon: "phone", label: "Call", sub: "“probably Q4”", kind: "existing", caption: "On a call, the buyer says the renewal will probably slip to Q4." },
-  { icon: "spark", label: "Agent", sub: "proposes 15 Dec", kind: "existing", caption: "An agent proposes a new close date, keeping her exact words and the hedge." },
-  { icon: "check", label: "Approval", sub: "one tap", kind: "both", caption: "A person approves. The card already shows what will go out of date." },
-  { icon: "db", label: "Database", sub: "saves v2", kind: "adds", caption: "The new version and a “field changed” note are saved together, so neither can be lost." },
-  { icon: "search", label: "Worker", sub: "who was given it?", kind: "adds", caption: "A worker finds every output given the close date, or with a list the deal joined or left." },
-  { icon: "file", label: "Outputs", sub: "2 flagged", kind: "adds", caption: "The forecast and the email are flagged. The account brief is left alone." },
-  { icon: "refresh", label: "Rewrite", sub: "checked · diff", kind: "adds", caption: "Each is rewritten, published only if its inputs are still current, and sent back with a diff." }
+const STACK = [
+  ["screen", "Screens", "React + TypeScript", "The approval card and the before/after diff."],
+  ["api", "API", "Python + FastAPI", "One place approves a change, so two people can't both win."],
+  ["db", "Database", "Postgres on Amazon RDS", "Field history, what each output read, and the “changed” note, saved in one go."],
+  ["queue", "Queue", "Amazon SQS + dead-letter queue", "Hands work to the workers. A failed job is parked, never lost."],
+  ["worker", "Workers", "Python on ECS Fargate", "Find what's out of date, rewrite it, re-check its inputs before it's accepted."],
+  ["spark", "AI model", "Claude on Amazon Bedrock", "Stays inside AWS. Model and prompt versions are pinned."]
 ];
 
-const OUTPUTS = [
-  { name: "Q3 forecast", reads: ["Halden close date · v1", "List: deals closing in Q3"], close: "Was given this field", leave: "Its list changed: Orrin left Q3" },
-  { name: "Email draft to Maya", reads: ["Halden close date · v1", "Maya's role · v1"], close: "Was given this field", leave: null },
-  { name: "Orrin Health brief", reads: ["Orrin main contact · v1", "Orrin competitors · v1"], close: null, leave: null }
+const ALONGSIDE = [
+  ["check", "Checks", "pytest evals", "Did the rewrite use the new date, keep “probably”, and invent nothing?"],
+  ["gauge", "Monitoring", "OpenTelemetry → CloudWatch", "Follow one change from approval to rewrite. Track lag and cost; never log customer text."]
 ];
 
-const tag = kind => kind === "existing" ? "On Ahoy's website" : kind === "both" ? "On Ahoy's website, plus new" : "New";
+const TABLES = [
+  ["field_versions", "Every value a field has had, including reversals. Never overwritten.", ["record_id", "field", "version", "value", "evidence"]],
+  ["proposals", "What an agent suggested, and which version it expected to change.", ["field", "expected_version", "value", "decision"]],
+  ["output_reads", "What each output was given: a field version, or a list and who was on it.", ["output_id", "field + version", "list + members"]],
+  ["output_versions", "Every version of a forecast or email, so each diff is exact.", ["output_id", "version", "content", "prompt_version"]],
+  ["outbox", "The “field changed” note, saved with the change, then sent to the queue.", ["event_id", "payload", "dedupe_key", "sent_at"]]
+];
+
+const PHASES = [
+  [2, "Weeks 1–2", "Approvals that can't be lost", "History on the server, one-winner approvals, safe retries, reversals.", "No lost or doubled approval across reloads, retries and two tabs."],
+  [3, "Weeks 3–5", "Flag exactly the right outputs", "Record what each output read, including lists like “closing in Q3”.", "Flags match a labelled test set 100%, untouched outputs included."],
+  [3, "Weeks 6–8", "Rewrites a person reviews", "Queued rewrites with a diff. Inputs re-checked before one is accepted.", "95 of 100 sample rewrites accepted with no fact fixed."],
+  [2, "Weeks 9–10", "Small pilot", "One team. Alerts, recovery tools and spend caps.", "Two weeks with nothing out of date accepted or sent."]
+];
+
+const NOT_YET = ["Sending on its own", "Editing sent emails", "Tracking any query", "A graph database", "New sync"];
 
 export function renderArchitecture({ resume = false } = {}) {
   return `<section class="arch">
-    <p class="eyebrow">How it would work</p>
-    <h1>Every AI output remembers what it read.</h1>
-    <p class="lead">So when a person approves a change, the system knows exactly what to update, and what to leave alone.</p>
+    <p class="eyebrow">How I'd build it</p>
+    <h1>Boring tools. One hard idea.</h1>
+    <p class="lead">Everything here is standard AWS, TypeScript and Python. The only new part is that every AI output keeps a record of what it read.</p>
 
-    <section class="arch-block" aria-labelledby="flowTitle">
-      <div class="block-head"><h2 id="flowTitle">Watch a change travel</h2><div class="legend"><span class="key existing">On Ahoy's website</span><span class="key adds">New</span></div></div>
-      <div class="flowchart" data-flow>
-        <ol class="flow-track">${FLOW.map((step, index) => `<li class="flow-node ${step.kind}" data-node="${index}">
-          <span class="node-icon">${glyph(step.icon)}</span>
-          <b>${esc(step.label)}</b>
-          <small>${esc(step.sub)}</small>
-          ${index < FLOW.length - 1 ? '<i class="flow-wire" aria-hidden="true"><span></span></i>' : ""}
-        </li>`).join("")}</ol>
-        <div class="flow-outputs" data-flow-outputs aria-hidden="true">
-          <span class="mini warn" data-mini="0">Q3 forecast</span>
-          <span class="mini warn" data-mini="1">Email draft to Maya</span>
-          <span class="mini ok">Orrin Health brief · untouched</span>
-        </div>
-        <div class="flow-foot">
-          <p class="flow-caption" aria-live="polite"><span data-flow-count>Step 1 of ${FLOW.length}</span><b data-flow-caption>${esc(FLOW[0].caption)}</b><em data-flow-tag>${tag(FLOW[0].kind)}</em></p>
-          <div class="flow-controls">
-            <button class="round" data-flow-go="-1" aria-label="Previous step">${glyph("back")}</button>
-            <button class="round play" data-flow-play aria-label="Play from the start">${glyph("play")}</button>
-            <button class="round" data-flow-go="1" aria-label="Next step">${glyph("next")}</button>
-          </div>
-        </div>
+    <section class="arch-block" aria-labelledby="stackTitle">
+      <div class="block-head"><h2 id="stackTitle">What I'd use</h2></div>
+      <div class="stack">
+        <ol class="stack-path">${STACK.map(([icon, layer, tech, why]) => `<li>
+          <span class="node-icon">${glyph(icon)}</span>
+          <div><small>${esc(layer)}</small><b>${esc(tech)}</b><p>${esc(why)}</p></div>
+        </li>`).join("")}
+          <li class="loop"><span class="node-icon">${glyph("back")}</span><div><b>Back to the screen with a diff</b><p>A person accepts or rejects the rewrite.</p></div></li>
+        </ol>
+        <aside class="stack-side">
+          <p class="side-label">Runs alongside</p>
+          ${ALONGSIDE.map(([icon, layer, tech, why]) => `<div class="side-card">${glyph(icon)}<small>${esc(layer)}</small><b>${esc(tech)}</b><p>${esc(why)}</p></div>`).join("")}
+          <p class="side-label">Not in version 1</p>
+          <div class="not-yet">${NOT_YET.map(item => `<span>${esc(item)}</span>`).join("")}</div>
+        </aside>
       </div>
     </section>
 
-    <section class="arch-block" aria-labelledby="mapTitle">
-      <div class="block-head"><h2 id="mapTitle">Try it: what goes out of date?</h2></div>
-      <p class="sub">Every output keeps a list of what it was given, including lists like “deals closing in Q3”. Pick a change.</p>
-      <div class="scenario" role="group" aria-label="Choose a change">
-        <button class="chip on" data-scenario="close">Halden's close date moves</button>
-        <button class="chip" data-scenario="leave">Orrin moves out of Q3</button>
-      </div>
-      <div class="depmap" data-depmap data-active="close">${OUTPUTS.map((output, index) => `<article class="dep" data-dep="${index}" data-close="${output.close ? "hit" : "miss"}" data-leave="${output.leave ? "hit" : "miss"}">
-        <header><h3>${esc(output.name)}</h3><span class="dep-badge"><span class="hit-text">Out of date</span><span class="miss-text">Untouched</span></span></header>
-        <ul>${output.reads.map(read => `<li>${esc(read)}</li>`).join("")}</ul>
-        <p class="why" data-why-close>${esc(output.close || "Never given this field")}</p>
-        <p class="why" data-why-leave>${esc(output.leave || "Doesn't use Orrin's close date or the Q3 list")}</p>
+    <section class="arch-block" aria-labelledby="tablesTitle">
+      <div class="block-head"><h2 id="tablesTitle">Five tables that matter</h2></div>
+      <p class="sub">Every row also carries a team id, so one team's data never mixes with another's.</p>
+      <div class="tables">${TABLES.map(([name, what, columns]) => `<article class="table-card">
+        <h3>${esc(name)}</h3>
+        <p>${esc(what)}</p>
+        <div class="cols">${columns.map(column => `<code>${esc(column)}</code>`).join("")}</div>
       </article>`).join("")}</div>
-      <p class="note-line">The second case is the one most designs miss: the forecast never read Orrin's date directly, but the list it used just changed.</p>
+    </section>
+
+    <section class="arch-block" aria-labelledby="phasesTitle">
+      <div class="block-head"><h2 id="phasesTitle">Four phases, about ten weeks</h2></div>
+      <p class="sub">Each phase has to pass its check before the next one starts.</p>
+      <div class="weeks" aria-hidden="true">${PHASES.map(([span], index) => `<span style="flex:${span}">${index + 1}</span>`).join("")}</div>
+      <ol class="phases">${PHASES.map(([, when, title, ships, done], index) => `<li>
+        <span class="phase-num">${index + 1}</span>
+        <small>${esc(when)}</small>
+        <b>${esc(title)}</b>
+        <p>${esc(ships)}</p>
+        <p class="done">${glyph("check")}<span>${esc(done)}</span></p>
+      </li>`).join("")}</ol>
     </section>
 
     <div class="arch-end">
-      <p>Independent prototype, not affiliated with Ahoy. Grey steps come from Ahoy's public website; I haven't seen how Ahoy is built inside.</p>
+      <p>Independent prototype, not affiliated with Ahoy. These are my picks; I haven't seen how Ahoy is built inside.</p>
       <button class="primary" data-go="demo">${resume ? "Continue the demo" : "Try the demo"} →</button>
     </div>
   </section>`;
-}
-
-let timer = null;
-let observer = null;
-
-export function unmountArchitecture() {
-  clearInterval(timer);
-  timer = null;
-  observer?.disconnect();
-  observer = null;
-}
-
-export function mountArchitecture(root) {
-  unmountArchitecture();
-  const flow = root.querySelector("[data-flow]");
-  if (!flow) return;
-  const nodes = [...flow.querySelectorAll("[data-node]")];
-  const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-  let step = 0;
-
-  const show = next => {
-    step = Math.max(0, Math.min(FLOW.length - 1, next));
-    nodes.forEach((node, index) => {
-      node.classList.toggle("done", index < step);
-      node.classList.toggle("active", index === step);
-    });
-    flow.querySelector("[data-flow-count]").textContent = `Step ${step + 1} of ${FLOW.length}`;
-    flow.querySelector("[data-flow-caption]").textContent = FLOW[step].caption;
-    const tagNode = flow.querySelector("[data-flow-tag]");
-    tagNode.textContent = tag(FLOW[step].kind);
-    tagNode.className = FLOW[step].kind;
-    flow.dataset.stage = step >= 6 ? "rewritten" : step >= 5 ? "flagged" : "before";
-    flow.querySelector('[data-flow-go="-1"]').disabled = step === 0;
-    flow.querySelector('[data-flow-go="1"]').disabled = step === FLOW.length - 1;
-  };
-  const stop = () => { clearInterval(timer); timer = null; flow.classList.remove("playing"); };
-  const play = () => {
-    stop();
-    if (reduced) { show(FLOW.length - 1); return; }
-    show(0);
-    flow.classList.add("playing");
-    timer = setInterval(() => { if (step >= FLOW.length - 1) stop(); else show(step + 1); }, 1700);
-  };
-
-  flow.addEventListener("click", event => {
-    const go = event.target.closest("[data-flow-go]");
-    if (go) { stop(); show(step + Number(go.dataset.flowGo)); }
-    if (event.target.closest("[data-flow-play]")) play();
-  });
-  root.querySelector("[data-depmap]")?.closest(".arch-block").addEventListener("click", event => {
-    const chip = event.target.closest("[data-scenario]");
-    if (!chip) return;
-    root.querySelectorAll("[data-scenario]").forEach(item => item.classList.toggle("on", item === chip));
-    root.querySelector("[data-depmap]").dataset.active = chip.dataset.scenario;
-  });
-
-  show(0);
-  if (reduced || !("IntersectionObserver" in window)) { show(FLOW.length - 1); return; }
-  observer = new IntersectionObserver(entries => {
-    if (entries.some(entry => entry.isIntersecting)) { observer.disconnect(); observer = null; play(); }
-  }, { threshold: 0.4 });
-  observer.observe(flow);
 }

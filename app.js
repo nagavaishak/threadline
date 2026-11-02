@@ -4,7 +4,7 @@ import {
   ingestTaskOutput, isValidDeal
 } from "./core.js";
 import { createStore } from "./store.js";
-import { renderArchitecture, mountArchitecture, unmountArchitecture } from "./architecture.js";
+import { renderArchitecture } from "./architecture.js";
 
 const STORAGE_KEY = "threadline-v5";
 const FIELD = "halden.closeDate";
@@ -118,7 +118,6 @@ const STEP_NAMES = ["You decide", "Update", "She changes her mind", "Update agai
 function render() {
   try {
     app.innerHTML = renderPage();
-    if (screen() === "architecture") mountArchitecture(app); else unmountArchitecture();
   } catch {
     app.innerHTML = `<div class="shell"><main class="page"><h1>Something went wrong</h1><p class="lead">Your saved progress can't be shown. Starting over clears it.</p><div class="actions"><button class="primary" data-action="restart">${icon("reset")} Start over</button></div></main></div>`;
   }
@@ -143,7 +142,7 @@ function renderPage() {
       <button class="brand" data-go="intro"><span class="mark" aria-hidden="true"></span>Threadline</button>
       <nav class="nav">
         ${inDemo ? `<button class="text-button" data-action="restart">${icon("reset")} Start over</button>` : `<button class="text-button" data-go="demo">Demo</button>`}
-        <button class="text-button ${current === "architecture" ? "active" : ""}" data-go="architecture">How it works</button>
+        <button class="text-button ${current === "architecture" ? "active" : ""}" data-go="architecture">How I'd build it</button>
       </nav>
     </header>
     <main class="page ${["intro", "architecture"].includes(current) ? "wide" : ""}">${inDemo ? renderSteps(STEP[current]) : ""}${views[current]()}</main>
@@ -169,7 +168,7 @@ function renderIntro() {
     <p class="lead">AI now writes forecasts and emails straight from the CRM. When a fact changes, like a close date, those outputs quietly go out of date. Threadline remembers which facts each output used, so it can flag exactly the ones that need updating, and leave everything else alone.</p>
     <div class="actions">
       <button class="primary" data-go="demo">${resume ? "Continue the demo" : "Try the 2-minute demo"} ${icon("arrow")}</button>
-      <button class="secondary" data-go="architecture">How it would work</button>
+      <button class="secondary" data-go="architecture">How I'd build it</button>
       ${resume ? `<button class="text-button" data-action="restart">${icon("reset")} Start over</button>` : ""}
     </div>
   </section>
