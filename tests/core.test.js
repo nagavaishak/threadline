@@ -81,11 +81,11 @@ test("rebuild regenerates from accepted state, keeps the previous version and di
   assert.equal(forecast.receiptHash, receipt.hash);
   assert.equal(forecast.staleReason, undefined);
   assert.ok(forecast.used.every(read => read.revision === 18));
-  assert.equal(forecast.content[0], "Q3 2026 commit: $80k across 1 deal.");
-  assert.ok(forecast.content.some(line => line.startsWith("Hedged: “We're probably going to revisit this in Q4.”")));
+  assert.equal(forecast.content[0], "Q3 forecast: $80k from 1 deal.");
+  assert.ok(forecast.content.some(line => line === "Note: this date is a guess. The buyer said “We're probably going to revisit this in Q4.”"));
   assert.deepEqual(forecast.previous.content, seedPipeline.artifacts[0].content);
   const diff = diffLines(forecast.previous.content, forecast.content);
-  assert.ok(diff.some(line => line.type === "removed" && line.text === "Q3 2026 commit: $200k across 2 deals."));
+  assert.ok(diff.some(line => line.type === "removed" && line.text === "Q3 forecast: $200k from 2 deals."));
   assert.ok(diff.some(line => line.type === "same" && line.text.startsWith("Orrin Health")));
   assert.equal(artifact(deal, "a-followup").state, "stale");
 });
@@ -105,7 +105,7 @@ test("a reversal keeps both moves in history and the regenerated forecast says s
   assert.equal(artifact(deal, "a-forecast").state, "stale");
   assert.equal(artifact(deal, "a-orrin-brief").state, "fresh");
   deal = rebuildOutput(deal, "a-forecast").deal;
-  assert.ok(artifact(deal, "a-forecast").content.includes("Close date has moved 2 times since 2 Sep 2026."));
+  assert.ok(artifact(deal, "a-forecast").content.includes("The close date has moved 2 times since 2 Sep 2026."));
 });
 
 test("approval against a stale base revision is refused", () => {

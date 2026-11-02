@@ -17,7 +17,7 @@ export const seedPipeline = {
     { id: "orrin.stage", recordId: "orrin", record: "Orrin Health", label: "Stage", kind: "judgment", value: { type: "text", text: "Commit" }, sourceIds: ["s-crm-orrin"] },
     { id: "orrin.closeDate", recordId: "orrin", record: "Orrin Health", label: "Close date", kind: "judgment", value: { type: "date", date: "2026-09-24" }, sourceIds: ["s-crm-orrin"] },
     { id: "orrin.champion", recordId: "orrin", record: "Orrin Health", label: "Champion", kind: "observation", value: { type: "text", text: "Dev Raman, VP Finance" }, sourceIds: ["s-call-orrin"] },
-    { id: "orrin.competition", recordId: "orrin", record: "Orrin Health", label: "Competition", kind: "inference", value: { type: "text", text: "Replacing spreadsheets; no other vendor named" }, sourceIds: ["s-call-orrin"] }
+    { id: "orrin.competition", recordId: "orrin", record: "Orrin Health", label: "Competition", kind: "inference", value: { type: "text", text: "None named. They use spreadsheets today" }, sourceIds: ["s-call-orrin"] }
   ],
   sources: [
     { id: "s-crm-halden", type: "CRM", custodian: "Jordan Reyes (rep)", title: "Halden Freight opportunity", locator: "Entered 12 Aug", observedAt: "2026-08-12", excerpt: "Close date 30 Sep 2026 · Commit · $120k" },
@@ -27,8 +27,8 @@ export const seedPipeline = {
     { id: "s-call-orrin", type: "CALL", custodian: "Dev Raman (Orrin)", title: "Orrin discovery call", locator: "19 Aug · 08:51", observedAt: "2026-08-19", excerpt: "Right now this all lives in spreadsheets; we haven't looked at other vendors." }
   ],
   artifacts: [
-    { id: "a-forecast", title: "Q3 forecast summary", policy: "forecast", state: "fresh", revision: 17,
-      content: ["Q3 2026 commit: $200k across 2 deals.", "Halden Freight: $120k, Commit, closes 30 Sep 2026.", "Orrin Health: $80k, Commit, closes 24 Sep 2026."],
+    { id: "a-forecast", title: "Q3 forecast", policy: "forecast", state: "fresh", revision: 17,
+      content: ["Q3 forecast: $200k from 2 deals.", "Halden Freight: $120k, closes 30 Sep 2026.", "Orrin Health: $80k, closes 24 Sep 2026."],
       used: [
         { fieldId: "halden.amount", revision: 17, value: { type: "money", amount: 120000 } },
         { fieldId: "halden.stage", revision: 17, value: { type: "text", text: "Commit" } },
@@ -37,17 +37,17 @@ export const seedPipeline = {
         { fieldId: "orrin.stage", revision: 17, value: { type: "text", text: "Commit" } },
         { fieldId: "orrin.closeDate", revision: 17, value: { type: "date", date: "2026-09-24" } }
       ] },
-    { id: "a-followup", title: "Follow-up email draft to Halden", policy: "followup", state: "fresh", revision: 17,
-      content: ["To: Maya Lindqvist, Head of Operations", "Subject: Next steps for your Q3 2026 renewal", "Thanks for the time today. Working back from a 30 Sep 2026 start, I'll send the order form two weeks ahead."],
+    { id: "a-followup", title: "Email draft to Maya", policy: "followup", state: "fresh", revision: 17,
+      content: ["To: Maya Lindqvist, Head of Operations", "Subject: Next steps for your Q3 2026 renewal", "Thanks for today. To start on 30 Sep 2026, I'll send the order form two weeks before."],
       used: [
         { fieldId: "halden.champion", revision: 17, value: { type: "text", text: "Maya Lindqvist, Head of Operations" } },
         { fieldId: "halden.closeDate", revision: 17, value: { type: "date", date: "2026-09-30" } }
       ] },
     { id: "a-orrin-brief", title: "Orrin Health account brief", policy: "brief", state: "fresh", revision: 17,
-      content: ["Champion: Dev Raman, VP Finance.", "Competition: Replacing spreadsheets; no other vendor named."],
+      content: ["Main contact: Dev Raman, VP Finance.", "Competitors: None named. They use spreadsheets today."],
       used: [
         { fieldId: "orrin.champion", revision: 17, value: { type: "text", text: "Dev Raman, VP Finance" } },
-        { fieldId: "orrin.competition", revision: 17, value: { type: "text", text: "Replacing spreadsheets; no other vendor named" } }
+        { fieldId: "orrin.competition", revision: 17, value: { type: "text", text: "None named. They use spreadsheets today" } }
       ] }
   ],
   events: [
@@ -56,7 +56,7 @@ export const seedPipeline = {
     { id: "e-proposal-close-q4", type: "change_proposed", at: "2026-09-02T14:41:00Z", actor: "Call notes agent", proposalId: "p-close-q4", baseRevision: 17, payload: {
       fieldId: "halden.closeDate",
       from: { type: "date", date: "2026-09-30" },
-      to: { type: "date", date: "2026-12-15", hedge: { quote: "We're probably going to revisit this in Q4.", note: "She said “probably” and gave no date. 15 Dec is the agent's reading of “Q4”." } },
+      to: { type: "date", date: "2026-12-15", hedge: { quote: "We're probably going to revisit this in Q4.", note: "She said “probably” and gave no date, so 15 Dec is the AI's best guess." } },
       reason: "The buyer signalled the renewal may slip out of Q3.",
       sourceIds: ["s-call-halden"]
     } }
@@ -72,7 +72,7 @@ export const reversalEmail = {
   sources: [{ id: "s-email-reversal", type: "EMAIL", custodian: "Maya Lindqvist (Halden)", title: "Re: renewal timing", locator: "16 Sep · 09:24", observedAt: "2026-09-16", excerpt: "Budget freed up after all. Can we pick this back up for October?" }],
   candidate: { proposalId: "p-close-oct", payload: {
     fieldId: "halden.closeDate",
-    to: { type: "date", date: "2026-10-30", hedge: { quote: "Can we pick this back up for October?", note: "She asked for October but gave no day. 30 Oct is the agent's reading." } },
+    to: { type: "date", date: "2026-10-30", hedge: { quote: "Can we pick this back up for October?", note: "She asked for October but gave no day, so 30 Oct is the AI's best guess." } },
     reason: "The buyer reversed the Q4 slip by email.",
     sourceIds: ["s-email-reversal"]
   } }
@@ -282,25 +282,25 @@ export function renderOutput(policy, fields, { moves = {} } = {}) {
     }));
     const commit = deals.filter(deal => deal.stage?.text === "Commit" && quarterOf(deal.close.date) === "Q3 2026");
     const total = commit.reduce((sum, deal) => sum + deal.amount.amount, 0);
-    const lines = [`Q3 2026 commit: ${formatValue({ type: "money", amount: total })} across ${commit.length} deal${commit.length === 1 ? "" : "s"}.`];
+    const lines = [`Q3 forecast: ${formatValue({ type: "money", amount: total })} from ${commit.length} deal${commit.length === 1 ? "" : "s"}.`];
     for (const deal of deals) {
       const quarter = quarterOf(deal.close.date);
-      lines.push(`${deal.record}: ${formatValue(deal.amount)}, ${deal.stage.text}, closes ${formatValue(deal.close)}${quarter === "Q3 2026" ? "" : ` (${quarter}, outside Q3)`}.`);
-      if (deal.close.hedge) lines.push(`Hedged: “${deal.close.hedge.quote}” ${deal.close.hedge.note}`);
+      lines.push(`${deal.record}: ${formatValue(deal.amount)}, closes ${formatValue(deal.close)}${quarter === "Q3 2026" ? "" : ` (now ${quarter}, so not in Q3)`}.`);
+      if (deal.close.hedge) lines.push(`Note: this date is a guess. The buyer said “${deal.close.hedge.quote}”`);
       const move = moves[deal.closeId];
-      if (move?.count >= 2) lines.push(`Close date has moved ${move.count} times since ${formatDate(move.since)}.`);
+      if (move?.count >= 2) lines.push(`The close date has moved ${move.count} times since ${formatDate(move.since)}.`);
     }
     return lines;
   }
   if (policy === "followup") {
     const close = value("halden.closeDate");
-    const lines = [`To: ${value("halden.champion").text}`, `Subject: Next steps for your ${quarterOf(close.date)} renewal`, `Thanks for the time today. Working back from a ${formatValue(close)} start, I'll send the order form two weeks ahead.`];
-    if (close.hedge) lines.push(`Draft note: this date is a reading of “${close.hedge.quote}” Confirm it with Maya before sending.`);
+    const lines = [`To: ${value("halden.champion").text}`, `Subject: Next steps for your ${quarterOf(close.date)} renewal`, `Thanks for today. To start on ${formatValue(close)}, I'll send the order form two weeks before.`];
+    if (close.hedge) lines.push(`Check with Maya before sending: she said “${close.hedge.quote}”`);
     return lines;
   }
   if (policy === "brief") {
-    const lines = [`Champion: ${value("orrin.champion").text}.`];
-    if (value("orrin.competition")) lines.push(`Competition: ${value("orrin.competition").text}.`);
+    const lines = [`Main contact: ${value("orrin.champion").text}.`];
+    if (value("orrin.competition")) lines.push(`Competitors: ${value("orrin.competition").text}.`);
     return lines;
   }
   throw new Error(`No template for ${policy}`);
